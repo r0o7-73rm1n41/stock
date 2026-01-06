@@ -1,29 +1,24 @@
-# ================= FULL FINAL READY REPLIT VERSION =================
+# ================= FULL FINAL STOCK TRACKER FOR REPLIT AUTOSCALE =================
 
 import yfinance as yf
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime
 import logging
 import time
-import sys
 import math
 import threading
 from flask import Flask
 
 # ================= CONFIG =================
-STOCKS = ["ETERNAL.NS", "VEDL.NS"]  # Add your stock
-INTERVAL = "1m"                     # 1-minute interval
-PERIOD = "1d"                        # Today's data
-REFRESH_INTERVAL = 5                 # Refresh every 5 seconds
+STOCKS = ["ETERNAL.NS", "VEDL.NS"]  # Add your stock symbols
+INTERVAL = "1m"                      # 1-minute interval
+PERIOD = "1d"                         # Today's data
+REFRESH_INTERVAL = 5                  # Seconds between checks
 
-# ================= LOGGING SETUP =================
+# ================= LOGGING =================
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("stock_tracker.log"),
-        logging.StreamHandler(sys.stdout)
-    ]
+    format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
 # ================= GLOBAL STATE =================
@@ -31,9 +26,7 @@ last_price = {stock: None for stock in STOCKS}
 
 # ================= HELPERS =================
 def exact_price(value):
-    """Convert float to Decimal with 2 decimal precision safely."""
-    if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
-        return Decimal("0.00")
+    """Convert float to Decimal safely with 2-decimal precision."""
     try:
         return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     except Exception as e:
@@ -41,7 +34,7 @@ def exact_price(value):
         return Decimal("0.00")
 
 def get_current_price(stock):
-    """Fetch current price for the stock."""
+    """Fetch the current price for a stock."""
     try:
         df = yf.download(
             tickers=[stock],
@@ -55,16 +48,16 @@ def get_current_price(stock):
             return None
         close_val = df["Close"].iloc[-1][stock]
         if isinstance(close_val, float) and math.isnan(close_val):
-            logging.warning(f"No valid data available for {stock}")
+            logging.warning(f"No valid price for {stock}")
             return None
         return exact_price(close_val)
     except Exception as e:
-        logging.error(f"Error fetching data for {stock}: {e}")
+        logging.error(f"Error fetching price for {stock}: {e}")
         return None
 
-# ================= STOCK TRACKER =================
+# ================= STOCK TRACKER THREAD =================
 def track_prices():
-    logging.info("Starting stock price tracker (background thread)")
+    logging.info("Stock tracker started (background thread)")
     while True:
         for stock in STOCKS:
             current_price = get_current_price(stock)
@@ -75,7 +68,7 @@ def track_prices():
             prev_price = last_price[stock]
             txt_file = f"{stock}.txt"
 
-            # First price
+            # First price logged
             if prev_price is None:
                 last_price[stock] = current_price
                 try:
@@ -85,7 +78,7 @@ def track_prices():
                 except IOError as e:
                     logging.error(f"Error writing to {txt_file}: {e}")
 
-            # Price changed
+            # Price change logged
             elif current_price != prev_price:
                 direction = "UP" if current_price > prev_price else "DOWN"
                 last_price[stock] = current_price
@@ -98,31 +91,25 @@ def track_prices():
 
         time.sleep(REFRESH_INTERVAL)
 
-# ================= FLASK KEEP-ALIVE SERVER =================
+# ================= FLASK SERVER =================
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Stock Tracker is running!", 200  # Respond immediately for health checks
+    """Health check endpoint for Replit Autoscale / UptimeRobot."""
+    return "Stock Tracker is running!", 200  # Respond immediately
 
-def run_flask():
-    app.run(host="0.0.0.0", port=3000)
+# ================= START BACKGROUND THREAD =================
+# Start the tracker thread when the module is imported
+tracker_thread = threading.Thread(target=track_prices)
+tracker_thread.daemon = True
+tracker_thread.start()
 
-# ================= RUN EVERYTHING =================
+# ================= ENTRY POINT =================
+# Gunicorn will run this app in production
 if __name__ == "__main__":
-    # Start Flask server in background
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
+    app.run(host="0.0.0.0", port=5000)
 
-    # Start stock tracker in background
-    tracker_thread = threading.Thread(target=track_prices)
-    tracker_thread.daemon = True
-    tracker_thread.start()
-
-    logging.info("Stock Tracker and Flask server are running. Main thread sleeping to keep Repl alive.")
-    while True:
-        time.sleep(60)
 
 
 
