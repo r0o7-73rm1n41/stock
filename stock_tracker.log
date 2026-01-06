@@ -1,0 +1,13 @@
+2026-01-06 11:27:08,320 - INFO - Starting stock price tracker (production mode)
+2026-01-06 11:27:09,334 - INFO - Initial price logged for ETERNAL.NS: 279.45
+2026-01-06 11:27:09,819 - INFO - Initial price logged for VEDL.NS: 622.25
+2026-01-06 11:27:15,089 - INFO - Price change logged for ETERNAL.NS: 279.35 (DOWN)
+2026-01-06 11:27:15,410 - INFO - Price change logged for VEDL.NS: 622.15 (DOWN)
+2026-01-06 11:27:28,338 - INFO - Price change logged for VEDL.NS: 622.10 (DOWN)
+2026-01-06 11:27:41,512 - INFO - Price change logged for VEDL.NS: 621.95 (DOWN)
+2026-01-06 11:27:47,463 - INFO - Price change logged for VEDL.NS: 621.90 (DOWN)
+2026-01-06 11:27:58,864 - INFO - Price change logged for VEDL.NS: 621.85 (DOWN)
+2026-01-06 11:28:56,933 - INFO - Price change logged for ETERNAL.NS: 279.40 (UP)
+2026-01-06 11:28:57,264 - INFO - Price change logged for VEDL.NS: 621.65 (DOWN)
+2026-01-06 11:29:04,146 - INFO - Program interrupted by user
+2026-01-06 11:29:04,146 - INFO - Program terminated
