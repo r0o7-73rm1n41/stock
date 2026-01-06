@@ -5,15 +5,16 @@ import logging
 import time
 import math
 import threading
-from flask import Flask
+import os
+from flask import Flask, jsonify
 
 # ================= CONFIG =================
-STOCKS = ["ETERNAL.NS", "VEDL.NS"]  # Add your stocks
-INTERVAL = "1m"                     # 1-minute interval
-PERIOD = "1d"                        # Today's data
-REFRESH_INTERVAL = 5                 # Refresh every 5 seconds
+STOCKS = ["ETERNAL.NS", "VEDL.NS"]  # Add your stocks here
+INTERVAL = "1m"                      # Data interval
+PERIOD = "1d"                         # Fetch today’s data
+REFRESH_INTERVAL = 5                  # Refresh every 5 seconds
 
-# ================= LOGGING SETUP =================
+# ================= LOGGING =================
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -38,7 +39,7 @@ def exact_price(value):
         return Decimal("0.00")
 
 def get_current_price(stock):
-    """Fetch current price for the stock."""
+    """Fetch the latest price for a stock."""
     try:
         df = yf.download(
             tickers=[stock],
@@ -59,62 +60,78 @@ def get_current_price(stock):
         logging.error(f"Error fetching data for {stock}: {e}")
         return None
 
-# ================= STOCK TRACKING LOOP =================
-def track_stocks():
-    logging.info("Starting stock price tracker (production mode)")
+def log_price(stock, price, direction):
+    """Append stock price to its TXT file."""
+    current_time = datetime.now().strftime("%H:%M:%S")
+    txt_file = f"{stock}.txt"
     try:
-        while True:
-            for stock in STOCKS:
-                current_price = get_current_price(stock)
-                if current_price is None:
-                    continue
+        with open(txt_file, "a", encoding="utf-8") as f:
+            f.write(f"{current_time},{price},{direction}\n")
+        logging.info(f"{stock}: {price} ({direction})")
+    except IOError as e:
+        logging.error(f"Error writing to {txt_file}: {e}")
 
-                current_time = datetime.now().strftime("%H:%M:%S")
-                prev_price = last_price[stock]
+# ================= STOCK TRACKER THREAD =================
+def stock_tracker():
+    logging.info("Stock tracker thread started")
+    while True:
+        for stock in STOCKS:
+            current_price = get_current_price(stock)
+            if current_price is None:
+                continue
 
-                # First price
-                if prev_price is None:
-                    last_price[stock] = current_price
-                    txt_file = f"{stock}.txt"
-                    try:
-                        with open(txt_file, "a", encoding="utf-8") as f:
-                            f.write(f"{current_time},{current_price},START\n")
-                        logging.info(f"Initial price logged for {stock}: {current_price}")
-                    except IOError as e:
-                        logging.error(f"Error writing to {txt_file}: {e}")
+            prev_price = last_price[stock]
 
-                # Price changed
-                elif current_price != prev_price:
-                    direction = "UP" if current_price > prev_price else "DOWN"
-                    last_price[stock] = current_price
-                    txt_file = f"{stock}.txt"
-                    try:
-                        with open(txt_file, "a", encoding="utf-8") as f:
-                            f.write(f"{current_time},{current_price},{direction}\n")
-                        logging.info(f"Price change logged for {stock}: {current_price} ({direction})")
-                    except IOError as e:
-                        logging.error(f"Error writing to {txt_file}: {e}")
+            # First price
+            if prev_price is None:
+                last_price[stock] = current_price
+                log_price(stock, current_price, "START")
+            # Price changed
+            elif current_price != prev_price:
+                direction = "UP" if current_price > prev_price else "DOWN"
+                last_price[stock] = current_price
+                log_price(stock, current_price, direction)
 
-            time.sleep(REFRESH_INTERVAL)
-    except Exception as e:
-        logging.error(f"Unexpected error: {e}")
+        time.sleep(REFRESH_INTERVAL)
 
-# ================= FLASK SETUP =================
+# ================= FLASK APP =================
 app = Flask(__name__)
 
 @app.route("/")
 def health_check():
-    """Health check endpoint for uptime monitors."""
-    return "Stock tracker running ✅", 200
+    """Health check endpoint returning current stock prices."""
+    prices = {}
+    for stock in STOCKS:
+        txt_file = f"{stock}.txt"
+        if os.path.exists(txt_file):
+            try:
+                with open(txt_file, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                    if lines:
+                        last_line = lines[-1].strip()
+                        _, price, direction = last_line.split(",")
+                        prices[stock] = {"price": price, "direction": direction}
+                    else:
+                        prices[stock] = {"price": None, "direction": None}
+            except Exception as e:
+                logging.error(f"Error reading {txt_file}: {e}")
+                prices[stock] = {"price": None, "direction": None}
+        else:
+            prices[stock] = {"price": None, "direction": None}
 
-# ================= RUN =================
+    return jsonify({"status": "ok", "stocks": prices})
+
+# ================= RUN APP =================
 if __name__ == "__main__":
-    # Start stock tracking in a separate background thread
-    t = threading.Thread(target=track_stocks, daemon=True)
-    t.start()
+    # Start the stock tracker in a background thread
+    tracker_thread = threading.Thread(target=stock_tracker, daemon=True)
+    tracker_thread.start()
 
-    # Start Flask server for health checks
-    app.run(host="0.0.0.0", port=5000)
+    # Use PORT from Railway or default 8080
+    port = int(os.environ.get("PORT", 8080))
+    logging.info(f"Starting Flask server on port {port}")
+    app.run(host="0.0.0.0", port=port)
+
 
 
 
